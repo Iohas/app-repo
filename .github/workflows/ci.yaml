@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Login ACR
+        uses: azure/docker-login@v1
+        with:
+          login-server: project01acr.azurecr.io
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and Push
+        run: |
+          docker build -t project01acr.azurecr.io/app:${{ github.sha }} .
+          docker push project01acr.azurecr.io/app:${{ github.sha }}
+
+      - name: Update gitops-repo
+        run: |
+          git clone https://${{ secrets.GH_TOKEN }}@github.com/Iohas/gitops-repo
+          cd gitops-repo
+          sed -i "s|image: project01acr.azurecr.io/app:.*|image: project01acr.azurecr.io/app:${{ github.sha }}|" apps/webapp/deployment.yaml
+          git config user.email "ci@github.com"
+          git config user.name "CI Bot"
+          git add .
+          git commit -m "ci: update image to ${{ github.sha }}"
+          git push
